@@ -1,0 +1,69 @@
+name: codi-it-ci
+
+on:
+  pull_request:
+    branches:
+      - dev  # ✅ dev 브랜치 PR일 때만 실행
+      - main 
+jobs:
+  test:
+    name: Run Lint & Tests
+    runs-on: ubuntu-latest
+
+    # PostgreSQL 컨테이너 (테스트용)
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U testuser"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      # 1️⃣ 코드 체크아웃
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # 2️⃣ Node.js 세팅
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # 3️⃣ 의존성 설치
+      - name: Install dependencies
+        run: npm install
+
+      # 4️⃣ 테스트용 `.env.test` 파일 생성 (가짜 값)
+      - name: Generate test environment file (.env.test)
+        run: |
+          echo "PORT=3000" >> .env.test
+          echo "DATABASE_URL=postgresql://testuser:testpass@localhost:5432/testdb?schema=public" >> .env.test
+          echo "JWT_ACCESS_SECRET=test_access_secret" >> .env.test
+          echo "JWT_REFRESH_SECRET=test_refresh_secret" >> .env.test
+          echo "AWS_REGION=ap-northeast-2" >> .env.test
+          echo "AWS_ACCESS_KEY_ID=test-access-key" >> .env.test
+          echo "AWS_SECRET_ACCESS_KEY=test-secret-key" >> .env.test
+          echo "AWS_BUCKET_NAME=test-bucket" >> .env.test
+          echo "NODE_ENV=test" >> .env.test
+        shell: bash
+
+      # 5️⃣ Prisma 마이그레이션 (테스트 DB 준비)
+      - name: Run Prisma Migrate
+        run: npx prisma migrate deploy
+
+      # 6️⃣ Lint 실행
+      - name: Run Lint
+        run: npm run lint
+
+      # 7️⃣ 테스트 실행 (dotenv -e .env.test 자동 적용)
+      - name: Run Jest Tests
+        run: npm run test
