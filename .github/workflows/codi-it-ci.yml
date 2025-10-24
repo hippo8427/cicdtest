@@ -3,14 +3,14 @@ name: codi-it-ci
 on:
   pull_request:
     branches:
-      - dev  # ✅ dev 브랜치 PR일 때만 실행
-      - main 
+      - dev # ✅ dev 브랜치 PR일 때만 실행
+      - main # main에도 테스트만 돌릴 수 있음 (자동 배포는 별도 워크플로에서)
+
 jobs:
   test:
     name: Run Lint & Tests
     runs-on: ubuntu-latest
 
-    # PostgreSQL 컨테이너 (테스트용)
     services:
       postgres:
         image: postgres:16
@@ -27,11 +27,11 @@ jobs:
           --health-retries=5
 
     steps:
-      # 1️⃣ 코드 체크아웃
+      # 1️⃣ 소스 코드 체크아웃
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # 2️⃣ Node.js 세팅
+      # 2️⃣ Node.js 환경 설정
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # 4️⃣ 테스트용 `.env.test` 파일 생성 (가짜 값)
+      # 4️⃣ 테스트용 `.env.test` 파일 생성
       - name: Generate test environment file (.env.test)
         run: |
           echo "PORT=3000" >> .env.test
@@ -58,12 +58,14 @@ jobs:
 
       # 5️⃣ Prisma 마이그레이션 (테스트 DB 준비)
       - name: Run Prisma Migrate
+        env:
+          DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb?schema=public
         run: npx prisma migrate deploy
 
       # 6️⃣ Lint 실행
       - name: Run Lint
         run: npm run lint
 
-      # 7️⃣ 테스트 실행 (dotenv -e .env.test 자동 적용)
+      # 7️⃣ Jest 테스트 실행 (dotenv -e .env.test 자동 로드)
       - name: Run Jest Tests
         run: npm run test
